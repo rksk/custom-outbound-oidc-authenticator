@@ -1,7 +1,5 @@
 package org.wso2.carbon.identity.application.authenticator.custom.oidc;
 
-import com.nimbusds.jose.util.JSONObjectUtils;
-import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -10,9 +8,9 @@ import org.wso2.carbon.identity.application.authentication.framework.FederatedAp
 import org.wso2.carbon.identity.application.authentication.framework.context.AuthenticationContext;
 import org.wso2.carbon.identity.application.authentication.framework.exception.AuthenticationFailedException;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
-import org.wso2.carbon.identity.application.authenticator.oidc.*;
+import org.wso2.carbon.identity.application.authenticator.oidc.OIDCAuthenticatorConstants;
+import org.wso2.carbon.identity.application.authenticator.oidc.OpenIDConnectAuthenticator;
 import org.wso2.carbon.identity.application.authenticator.custom.oidc.internal.CustomOpenIDConnectAuthenticatorDataHolder;
-import org.wso2.carbon.identity.application.common.model.ClaimMapping;
 import org.wso2.carbon.identity.core.util.IdentityCoreConstants;
 import org.wso2.carbon.user.api.UserRealm;
 import org.wso2.carbon.user.api.UserStoreException;
@@ -22,13 +20,20 @@ import org.wso2.carbon.identity.application.common.util.IdentityApplicationConst
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.text.ParseException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class CustomOpenIDConnectAuthenticator extends OpenIDConnectAuthenticator
         implements FederatedApplicationAuthenticator {
 
-    private static Log log = LogFactory.getLog(CustomOpenIDConnectAuthenticator.class);
+    private static final long serialVersionUID = -4154255583070524019L;
+    private static final String ACCESS_TOKEN_REQUIRED_IN_CLAIM = "accessTokenRequiredInClaim";
+    private static final String ID_TOKEN_REQUIRED_IN_CLAIM = "idTokenRequiredInClaim";
+    private static final String FED_ACCESS_TOKEN = "fedAccessToken";
+    private static final String FED_ID_TOKEN = "fedIDToken";
+    private static final Log log = LogFactory.getLog(CustomOpenIDConnectAuthenticator.class);
 
     @Override
     protected void processAuthenticationResponse(HttpServletRequest request, HttpServletResponse response,
@@ -36,31 +41,30 @@ public class CustomOpenIDConnectAuthenticator extends OpenIDConnectAuthenticator
 
         super.processAuthenticationResponse(request, response, context);
 
-        if (!Boolean.parseBoolean(context.getAuthenticatorProperties().get("accessTokenRequiredInClaim")) &&
-                !Boolean.parseBoolean((context.getAuthenticatorProperties().get("idTokenRequiredInClaim")))) {
-            return;
-        } else {
+        if (Boolean.parseBoolean(context.getAuthenticatorProperties().get(ACCESS_TOKEN_REQUIRED_IN_CLAIM)) ||
+                Boolean.parseBoolean((context.getAuthenticatorProperties().get(ID_TOKEN_REQUIRED_IN_CLAIM)))) {
+
             Map<String, Object> jsonObject = new HashMap<>();
             String accessToken = "";
             String idToken = "";
 
-            if (Boolean.parseBoolean(context.getAuthenticatorProperties().get("accessTokenRequiredInClaim"))) {
+            if (Boolean.parseBoolean(context.getAuthenticatorProperties().get(ACCESS_TOKEN_REQUIRED_IN_CLAIM))) {
                 accessToken = context.getProperty(OIDCAuthenticatorConstants.ACCESS_TOKEN).toString();
                 if (log.isDebugEnabled()) {
                     log.debug("accessToken retrieved from the federated authenticator:" + accessToken);
                 }
                 if (StringUtils.isNotBlank(accessToken)) {
-                    jsonObject.put("fedAccessToken", accessToken);
+                    jsonObject.put(FED_ACCESS_TOKEN, accessToken);
                 }
             }
 
-            if (Boolean.parseBoolean(context.getAuthenticatorProperties().get("idTokenRequiredInClaim")))  {
+            if (Boolean.parseBoolean(context.getAuthenticatorProperties().get(ID_TOKEN_REQUIRED_IN_CLAIM)))  {
                 idToken = context.getProperty(OIDCAuthenticatorConstants.ID_TOKEN).toString();
                 if (log.isDebugEnabled()){
                     log.debug("idToken retrieved from the federated authenticator:" + idToken);
                 }
                 if (StringUtils.isNotBlank(idToken)) {
-                    jsonObject.put("fedIDToken", idToken);
+                    jsonObject.put(FED_ID_TOKEN, idToken);
                 }
             }
 
@@ -76,28 +80,11 @@ public class CustomOpenIDConnectAuthenticator extends OpenIDConnectAuthenticator
 
     }
 
-    private Map<String, Object> getIdTokenClaims(AuthenticationContext context, String idToken) {
-        context.setProperty(OIDCAuthenticatorConstants.ID_TOKEN, idToken);
-        String base64Body = idToken.split("\\.")[1];
-        byte[] decoded = Base64.decodeBase64(base64Body.getBytes());
-        Set<Map.Entry<String, Object>> jwtAttributeSet = new HashSet<>();
-        try {
-            jwtAttributeSet = JSONObjectUtils.parseJSONObject(new String(decoded)).entrySet();
-        }  catch (ParseException e) {
-            log.error("Error occurred while parsing JWT provided by federated IDP: ", e);
-        }
-        Map<String, Object> jwtAttributeMap = new HashMap();
-        for(Map.Entry<String, Object> entry : jwtAttributeSet) {
-            jwtAttributeMap.put(entry.getKey(), entry.getValue());
-        }
-        return jwtAttributeMap;
-    }
-
     private String getMultiAttributeSeparator(AuthenticationContext context, String authenticatedUserId)
             throws AuthenticationFailedException {
+
         String attributeSeparator = null;
         try {
-
             String tenantDomain = context.getTenantDomain();
 
             if (StringUtils.isBlank(tenantDomain)) {
@@ -131,14 +118,9 @@ public class CustomOpenIDConnectAuthenticator extends OpenIDConnectAuthenticator
 
     @Override
     public String getName() {
-        return CustomOIDCAuthenticatorConstants.AUTHENTICATOR_NAME;
+        return "CustomOpenIDConnectAuthenticator";
     }
 
-    /**
-     * Get Configuration Properties
-     *
-     * @return
-     */
     @Override
     public List<Property> getConfigurationProperties() {
         List<Property> configProperties = new ArrayList<Property>();
@@ -206,7 +188,7 @@ public class CustomOpenIDConnectAuthenticator extends OpenIDConnectAuthenticator
         // org/wso2/carbon/identity/application/common/util/IdentityApplicationConstants.java
         Property accessTokenRequired = new Property();
         accessTokenRequired.setDisplayName("Federated OIDC Access Token required in Claim");
-        accessTokenRequired.setName("accessTokenRequiredInClaim");
+        accessTokenRequired.setName(ACCESS_TOKEN_REQUIRED_IN_CLAIM);
         accessTokenRequired.setDescription("Specify whether the Federated OIDC Access Token is required to be " +
                 "retrieved as a claim");
         accessTokenRequired.setValue("false");
@@ -216,7 +198,7 @@ public class CustomOpenIDConnectAuthenticator extends OpenIDConnectAuthenticator
 
         Property idTokenRequired = new Property();
         idTokenRequired.setDisplayName("Federated OIDC ID Token required in Claim");
-        idTokenRequired.setName("idTokenRequiredInClaim");
+        idTokenRequired.setName(ID_TOKEN_REQUIRED_IN_CLAIM);
         idTokenRequired.setDescription("Specify whether the Federated OIDC ID Token is required to be " +
                 "retrieved as a claim");
         idTokenRequired.setValue("false");

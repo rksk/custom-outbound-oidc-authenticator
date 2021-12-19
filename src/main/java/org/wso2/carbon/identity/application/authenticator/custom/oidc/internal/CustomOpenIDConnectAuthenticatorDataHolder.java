@@ -10,8 +10,6 @@ public class CustomOpenIDConnectAuthenticatorDataHolder {
 
     private RealmService realmService;
 
-    private ClaimMetadataManagementService claimMetadataManagementService;
-
     private CustomOpenIDConnectAuthenticatorDataHolder() {}
 
     public static CustomOpenIDConnectAuthenticatorDataHolder getInstance() {
@@ -26,11 +24,4 @@ public class CustomOpenIDConnectAuthenticatorDataHolder {
         this.realmService = realmService;
     }
 
-    public ClaimMetadataManagementService getClaimMetadataManagementService() {
-        return claimMetadataManagementService;
-    }
-
-    public void setClaimMetadataManagementService(ClaimMetadataManagementService claimMetadataManagementService) {
-        this.claimMetadataManagementService = claimMetadataManagementService;
-    }
 }
